@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>充值跳转中...</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #0f0f0f;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #fff;
+        }
+        .card {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 16px;
+            padding: 32px 28px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+        h2 {
+            margin: 0 0 24px;
+            font-size: 22px;
+            font-weight: 600;
+            color: #e0e0e0;
+        }
+        .input-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 14px;
+            color: #aaa;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 12px 14px;
+            background: #262626;
+            border: 1px solid #444;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 16px;
+            box-sizing: border-box;
+            transition: border 0.2s;
+        }
+        .input-group input:focus {
+            border-color: #5b9aff;
+            outline: none;
+        }
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: #2b6ed7;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 4px;
+        }
+        .btn:hover {
+            background: #1f5bb5;
+        }
+        .btn:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        .hint {
+            font-size: 13px;
+            color: #888;
+            margin-top: 16px;
+        }
+        .error {
+            color: #ff6b6b;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+        .loader {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>📱 游戏充值跳转</h2>
+        <form id="jumpForm">
+            <div class="input-group">
+                <label for="gameId">请输入游戏数字ID</label>
+                <input type="text" id="gameId" placeholder="例如：123456" inputmode="numeric" autocomplete="off" required>
+            </div>
+            <button type="submit" class="btn" id="submitBtn">立即充值</button>
+        </form>
+        <div class="hint" id="sysHint"></div>
+        <div id="errorMsg" class="error"></div>
+    </div>
+
+    <script>
+        // ========== 🔧 占位符已替换 ==========
+        const SUPABASE_URL = "https://jjrghssamxyhvovbxppc.supabase.co";
+        const SUPABASE_ANON_KEY = "sb_publishable_Q8Qpv8BqMsA2X2nrP8DEYA_-4vNnOB-";
+        const APP_STORE_LINK = "https://pagedoo.pay.qq.com/s2/one?s=V2_AP4H6A6LWRGG&tx_trace_key=1854aed29aaf4d158df13f95fb3db2d7";
+        // =======================================
+
+        const form = document.getElementById('jumpForm');
+        const gameIdInput = document.getElementById('gameId');
+        const submitBtn = document.getElementById('submitBtn');
+        const sysHint = document.getElementById('sysHint');
+        const errorMsg = document.getElementById('errorMsg');
+
+        // 获取 URL 参数中的主播名
+        const urlParams = new URLSearchParams(window.location.search);
+        const anchor = urlParams.get('anchor') || 'unknown';
+
+        // 检测操作系统
+        function detectOS() {
+            const ua = navigator.userAgent || '';
+            if (/iPhone|iPad|iPod/i.test(ua)) return 'ios';
+            if (/Android/i.test(ua)) return 'android';
+            return 'android';
+        }
+        const system = detectOS();
+        sysHint.textContent = `当前设备：${system.toUpperCase()} · 主播：${anchor}`;
+
+        // 表单提交
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            errorMsg.textContent = '';
+            const gameId = gameIdInput.value.trim();
+            if (!/^\d+$/.test(gameId)) {
+                errorMsg.textContent = '游戏ID必须为纯数字';
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="loader"></span>处理中...';
+
+            try {
+                // 记录到 Supabase
+                const record = {
+                    anchor: anchor,
+                    system: system,
+                    game_id: gameId,
+                    user_agent: navigator.userAgent,
+                };
+
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/recharge_logs`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'Prefer': 'return=minimal'
+                    },
+                    body: JSON.stringify(record)
+                });
+
+                if (!response.ok) {
+                    const errText = await response.text();
+                    throw new Error(`记录失败: ${errText}`);
+                }
+
+                // 跳转到应用宝链接（附带游戏ID）
+                const finalUrl = APP_STORE_LINK + (APP_STORE_LINK.includes('?') ? '&' : '?') + 'game_id=' + gameId;
+                window.location.href = finalUrl;
+
+            } catch (err) {
+                console.error(err);
+                errorMsg.textContent = '网络异常，请重试';
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '立即充值';
+            }
+        });
+    </script>
+</body>
+</html>
